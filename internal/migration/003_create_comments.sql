@@ -4,5 +4,5 @@ CREATE TABLE
         author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
         board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE
 
-        content text  NOT NULL DEFAULT TEXT,
+        content Text  NOT NULL DEFAULT "comment",
     )
