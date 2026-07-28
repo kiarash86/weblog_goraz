@@ -1,5 +1,5 @@
 CREATE TABLE
-    Boards (
+    boards (
         id SERIAL PRIMARY KEY,
         author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
         name varchar(50)  NOT NULL DEFAULT TITLE,
