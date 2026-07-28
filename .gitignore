@@ -1,0 +1,36 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build output
+/weblog
+/tmp/
+*.test
+*.out
+
+# Go workspace / module cache
+go.work
+go.work.sum
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Uploaded files
+uploads/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
