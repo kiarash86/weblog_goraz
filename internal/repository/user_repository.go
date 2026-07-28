@@ -67,3 +67,15 @@ func (ur *UserRepository) FindByUserName(ctx context.Context, username string) (
 	}
 	return &user, nil
 }
+
+func (ur *UserRepository) IsTakenThisUsername(ctx context.Context, username string) (isTaken bool) {
+	query := `SELECT EXISTS (SELECT 1  FROM users WHERE username = $1)`
+
+	err := ur.db.QueryRow(ctx, query, username).Scan(&isTaken)
+	if err != nil {
+
+		return
+	}
+
+	return
+}
