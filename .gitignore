@@ -1,36 +1,30 @@
+
+!.env.example
 # Binaries
+# Environment variables
+# Go build output
+# Go workspace / module cache
+# IDE / editor
+# Logs
+# OS files
+# Uploaded files
+*.dll
+*.dylib
 *.exe
 *.exe~
-*.dll
-*.so
-*.dylib
-
-# Go build output
-/weblog
-/tmp/
-*.test
+*.log
+.env
 *.out
-
-# Go workspace / module cache
+*.so
+*.swp
+*.test
+.DS_Store
+.env.*
+.idea/
+.vscode/
+/tmp/
+/weblog
+Thumbs.db
 go.work
 go.work.sum
-
-# Environment variables
-.env
-.env.*
-!.env.example
-
-# Uploaded files
 uploads/
-
-# IDE / editor
-.vscode/
-.idea/
-*.swp
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
