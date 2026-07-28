@@ -1,10 +1,9 @@
 CREATE TABLE
     Boards (
-        id SERIAL,
-        authorID SERIAL
-         FOREIGN KEY (authorID) REFERENCES Authors (id) ON DELETE CASCADE,
-        name varchar(50),
-        context varchar(1000),
-        isPrivate boolean,
-        imgPath varchar(100) OPTIMAL NULL
+        id SERIAL PRIMARY KEY,
+        author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+        name varchar(50)  NOT NULL DEFAULT TITLE,
+        content text  NOT NULL DEFAULT TEXT,
+        is_private boolean  NOT NULL DEFAULT FALSE,
+        img_path varchar(100) 
     )
