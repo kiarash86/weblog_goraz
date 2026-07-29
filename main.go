@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cant run migrations: %v", err)
 	}
-	
+
 	userRepo := repository.NewUserRepository(pool)
 	boardRepo := repository.NewBoardRepository(pool)
 	commentRepo := repository.NewCommentRepository(pool)
@@ -51,7 +51,7 @@ func main() {
 
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: []string{"https://goraz-weblog.netlify.app/"},
 		AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
 	}))
