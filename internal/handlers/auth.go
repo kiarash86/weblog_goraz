@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"weblog/internal/auth"
 	"weblog/internal/repository"
+
 	"github.com/labstack/echo/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -27,7 +28,7 @@ func NewAuthHandler(userRepo *repository.UserRepository, jwtKey string) (auth *A
 	return
 }
 
-func (ah *AuthHandler) SignUp(c echo.Context) error {
+func (ah *AuthHandler) SignUp(c *echo.Context) error {
 	var signUpReq signReq
 	err := c.Bind(&signUpReq)
 	if err != nil {
@@ -60,9 +61,10 @@ func (ah *AuthHandler) SignUp(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]interface{}{
 		"user":  user.ID,
 		"token": token,
-	})}
+	})
+}
 
-func (ah *AuthHandler) Login(c  echo.Context) error {
+func (ah *AuthHandler) Login(c *echo.Context) error {
 	var login signReq
 	err := c.Bind(&login)
 	if err != nil {
