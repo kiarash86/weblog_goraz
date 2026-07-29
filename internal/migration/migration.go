@@ -14,6 +14,7 @@ import (
 
 // ai code
 // later i will check to see what this is doing
+//go:embed *.sql
 var migrationFiles embed.FS
 
 func Run(pool *pgxpool.Pool) error {
