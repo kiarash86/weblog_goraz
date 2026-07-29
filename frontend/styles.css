@@ -39,12 +39,23 @@ html, body {
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.5;
+  height: 100%;
 }
 
 body {
   background-image:
     radial-gradient(ellipse 1200px 600px at 50% -10%, rgba(201,162,39,0.06), transparent);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#main-root {
+  flex: 1 0 auto;
+}
+
+#app-footer {
+  flex-shrink: 0;
 }
 
 a { color: var(--brass); text-decoration: none; }
