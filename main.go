@@ -1,5 +1,54 @@
 package main
 
+import (
+	"log"
+	"net/http"
+	"weblog/internal/config"
+	"weblog/internal/db"
+	"weblog/internal/handlers"
+	"weblog/internal/repository"
+
+	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+)
+
 func main() {
-	
+
+	var cfg *config.Config
+	err := godotenv.Load()
+	if err != nil {
+		log.Print("cant load env and use system\n")
+	}
+	cfg, err = config.Load()
+	if err != nil {
+		log.Fatalf("cant load config: %v", err)
+	}
+
+	pool := db.Connect(cfg)
+	defer pool.Close()
+	userRepo := repository.NewUserRepository(pool)
+	boardRepo := repository.NewBoardRepository(pool)
+	commentRepo := repository.NewCommentRepository(pool)
+	boardShareRepo := repository.NewBoardShareRepository(pool)
+	_ = userRepo
+	_ = boardRepo
+	_ = commentRepo
+	_ = boardShareRepo
+
+	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
+
+	e := echo.New()
+	e.Use(middleware.RequestLogger())
+	e.Use(middleware.Recover())
+
+	e.GET("/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
+
+	e.POST("/signup", authHandler.SignUp)
+	e.POST("/login", authHandler.Login)
+
+	log.Fatal(e.Start(":" + cfg.Port))
+
 }
