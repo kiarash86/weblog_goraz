@@ -4,7 +4,7 @@ import "github.com/ilyakaznacheev/cleanenv"
 
 type Config struct {
 	DatabaseURL string `env:"DATABASE_URL" env-default:"postgres://postgres:postgres@localhost:5432/weblog?sslmode=disable"`
-	JWTSecret   string `env:"JWT_SECRET" env-default:"dev-secret-change-me"`
+	JWTKey   string `env:"JWT_KEY" env-default:"kiakiakiakia"`
 	Port        string `env:"PORT" env-default:"8080"`
 }
 
