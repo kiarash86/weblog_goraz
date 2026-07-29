@@ -40,7 +40,14 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
 	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo)
 	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
+	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo)
+
 	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+    AllowOrigins: []string{"*"},
+    AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
+    AllowHeaders: []string{"Content-Type", "Authorization"},
+}))
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	protected := e.Group("")
@@ -57,6 +64,9 @@ func main() {
 	protected.GET("/weblog/:id", boardHandler.GetByID)
 	protected.POST("/weblog", boardHandler.Create)
 	protected.POST("/weblog/:id/share", boardShareHandler.Add)
-	log.Fatal(e.Start(":" + cfg.Port))
+	protected.GET("/weblog/:id/comment", commentHandler.ListCommentsOfBoard)
+	protected.POST("/weblog/:id/comment", commentHandler.Create)
+	protected.DELETE("/weblog/:id/comment/:commentId", commentHandler.DeleteByID)
+	log.Fatal(e.Start(":" + cfg.Port))	
 
 }
