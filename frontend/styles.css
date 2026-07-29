@@ -602,3 +602,53 @@ main {
   .entry-detail h1 { font-size: 26px; }
   .stamp { width: 52px; height: 52px; }
 }
+
+/* ---------- footer ---------- */
+
+#app-footer {
+  border-top: 1px solid var(--ink-line);
+  margin-top: 48px;
+}
+
+.footer-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 20px 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.footer-links a {
+  color: var(--paper-dim);
+}
+.footer-links a:hover {
+  color: var(--brass);
+  text-decoration: none;
+}
+
+.footer-dot {
+  color: var(--ink-line);
+}
+
+@media (max-width: 480px) {
+  .footer-inner { justify-content: center; text-align: center; }
+}
