@@ -12,4 +12,4 @@ services:
       - weblog_pgdata:/var/lib/postgresql/data
 
 volumes:
-  weblog_pgdata:
+  weblog_pgdata:  
