@@ -6,6 +6,7 @@ import (
 	"weblog/internal/config"
 	"weblog/internal/db"
 	"weblog/internal/handlers"
+	"weblog/internal/middlewares"
 	"weblog/internal/repository"
 
 	"github.com/joho/godotenv"
@@ -37,11 +38,13 @@ func main() {
 	_ = boardShareRepo
 
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
-
+	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo)
+	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
 	e := echo.New()
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
-
+	protected := e.Group("")
+	protected.Use(middlewares.RequireAuth(cfg.JWTKey))
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -49,6 +52,11 @@ func main() {
 	e.POST("/signup", authHandler.SignUp)
 	e.POST("/login", authHandler.Login)
 
+	protected.DELETE("/weblog/:id", boardHandler.DeleteByID)
+	protected.GET("/weblog", boardHandler.Feed)
+	protected.GET("/weblog/:id", boardHandler.GetByID)
+	protected.POST("/weblog", boardHandler.Create)
+	protected.POST("/weblog/:id/share", boardShareHandler.Add)
 	log.Fatal(e.Start(":" + cfg.Port))
 
 }
