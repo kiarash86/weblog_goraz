@@ -42,5 +42,5 @@ window.MARGINALIA_CONFIG = {
   // isn't served from the same origin as this static frontend (docker-compose
   // here only stands up Postgres). Point this at wherever `go run .` /
   // the built binary is actually listening.
-  API_BASE: 'http://localhost:8080',
+  API_BASE: 'webloggoraz-production.up.railway.app',
 };
