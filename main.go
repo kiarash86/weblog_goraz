@@ -7,6 +7,7 @@ import (
 	"weblog/internal/db"
 	"weblog/internal/handlers"
 	"weblog/internal/middlewares"
+	"weblog/internal/migration"
 	"weblog/internal/repository"
 
 	"github.com/joho/godotenv"
@@ -28,6 +29,12 @@ func main() {
 
 	pool := db.Connect(cfg)
 	defer pool.Close()
+
+	err = migration.Run(pool)
+	if err != nil {
+		log.Fatalf("cant run migrations: %v", err)
+	}
+	
 	userRepo := repository.NewUserRepository(pool)
 	boardRepo := repository.NewBoardRepository(pool)
 	commentRepo := repository.NewCommentRepository(pool)
@@ -44,10 +51,10 @@ func main() {
 
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-    AllowOrigins: []string{"*"},
-    AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
-    AllowHeaders: []string{"Content-Type", "Authorization"},
-}))
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Authorization"},
+	}))
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	protected := e.Group("")
@@ -67,6 +74,6 @@ func main() {
 	protected.GET("/weblog/:id/comment", commentHandler.ListCommentsOfBoard)
 	protected.POST("/weblog/:id/comment", commentHandler.Create)
 	protected.DELETE("/weblog/:id/comment/:commentId", commentHandler.DeleteByID)
-	log.Fatal(e.Start(":" + cfg.Port))	
+	log.Fatal(e.Start(":" + cfg.Port))
 
 }
