@@ -1,0 +1,611 @@
+/* ==========================================================================
+   Marginalia — app logic
+   Vanilla JS, no build step. See config.js for the real API contract this
+   backend exposes (auth is bearer-token only, boards have no created_at
+   and no username — just a numeric author_id, etc).
+   ========================================================================== */
+
+const API_BASE = (window.MARGINALIA_CONFIG && window.MARGINALIA_CONFIG.API_BASE) || '';
+const STORAGE_KEY = 'marginalia_auth';
+
+function loadStoredAuth() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveStoredAuth(token, user) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
+  } catch (_) { /* ignore */ }
+}
+
+function clearStoredAuth() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* ignore */ }
+}
+
+const stored = loadStoredAuth();
+let AUTH_TOKEN = stored ? stored.token : null;
+
+const state = {
+  user: stored ? stored.user : null, // { id, username } | null
+  route: { name: 'feed' }, // {name:'feed'} | {name:'detail', id}
+  boards: [],
+  detail: null,
+  comments: [],
+  loading: true,
+  error: null,
+};
+
+const root = document.getElementById('main-root');
+const headerSlot = document.getElementById('header-user-slot');
+const modalRoot = document.getElementById('modal-root');
+
+/* ---------------------------- API wrapper ---------------------------- */
+
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return null;
+
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* empty body */ }
+
+  if (res.status === 401) {
+    // Token missing/expired/invalid — the backend has no /me to pre-check
+    // this, so we only find out when a real request fails.
+    AUTH_TOKEN = null;
+    state.user = null;
+    clearStoredAuth();
+  }
+
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/* ---------------------------- helpers ---------------------------- */
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function el(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+// The backend never sends a username for a board/comment author — only
+// author_id. We only know our own logged-in username locally, so that's
+// the one case we can label with a handle; everyone else shows as
+// "User #<id>".
+function authorLabel(authorId) {
+  if (state.user && state.user.id === authorId) return `@${escapeHtml(state.user.username)}`;
+  return `User #${authorId}`;
+}
+
+/* ---------------------------- render: header ---------------------------- */
+
+function renderHeader() {
+  headerSlot.innerHTML = '';
+  if (state.user) {
+    headerSlot.appendChild(el(`
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="handle">@${escapeHtml(state.user.username)}</span>
+        <button class="btn btn-brass" id="btn-new-entry">+ New entry</button>
+        <button class="btn btn-ghost" id="btn-logout">Log out</button>
+      </div>
+    `));
+    headerSlot.querySelector('#btn-new-entry').onclick = openNewEntryModal;
+    headerSlot.querySelector('#btn-logout').onclick = logout;
+  } else {
+    headerSlot.appendChild(el(`<span style="color:var(--paper-dim); font-size:12px;">the notebook everyone's writing in</span>`));
+  }
+}
+
+/* ---------------------------- render: auth ---------------------------- */
+
+function renderAuth() {
+  root.innerHTML = '';
+  const wrap = el(`
+    <div class="auth-shell">
+      <div class="auth-card">
+        <div class="tabs">
+          <button class="tab active" data-tab="login">Log in</button>
+          <button class="tab" data-tab="signup">Sign up</button>
+        </div>
+        <h1 class="auth-title" id="auth-title">Welcome back</h1>
+        <p class="auth-sub" id="auth-sub">Log in to read, write, and leave notes in the margin.</p>
+        <div id="auth-error"></div>
+        <form id="auth-form">
+          <div class="field">
+            <label for="f-username">Username</label>
+            <input type="text" id="f-username" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="f-password">Password</label>
+            <input type="password" id="f-password" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-brass btn-block" id="auth-submit">Log in</button>
+        </form>
+      </div>
+    </div>
+  `);
+  root.appendChild(wrap);
+
+  let mode = 'login';
+  const tabs = wrap.querySelectorAll('.tab');
+  const title = wrap.querySelector('#auth-title');
+  const sub = wrap.querySelector('#auth-sub');
+  const submitBtn = wrap.querySelector('#auth-submit');
+  const errSlot = wrap.querySelector('#auth-error');
+
+  function setMode(m) {
+    mode = m;
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === m));
+    if (m === 'login') {
+      title.textContent = 'Welcome back';
+      sub.textContent = 'Log in to read, write, and leave notes in the margin.';
+      submitBtn.textContent = 'Log in';
+    } else {
+      title.textContent = 'Start a notebook';
+      sub.textContent = 'Pick a username — this is how others will see your entries and notes.';
+      submitBtn.textContent = 'Sign up';
+    }
+    errSlot.innerHTML = '';
+  }
+  tabs.forEach(t => t.onclick = () => setMode(t.dataset.tab));
+
+  wrap.querySelector('#auth-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const username = wrap.querySelector('#f-username').value.trim();
+    const password = wrap.querySelector('#f-password').value;
+    submitBtn.disabled = true;
+    errSlot.innerHTML = '';
+    try {
+      // Both /signup and /login return { user: <id>, token } directly —
+      // signup already logs you in, no separate login call needed.
+      const res = mode === 'signup'
+        ? await api('/signup', { method: 'POST', body: { username, password } })
+        : await api('/login', { method: 'POST', body: { username, password } });
+
+      AUTH_TOKEN = res.token;
+      state.user = { id: res.user, username };
+      saveStoredAuth(AUTH_TOKEN, state.user);
+      await loadFeed();
+      renderHeader();
+      renderRoute();
+    } catch (err) {
+      errSlot.appendChild(el(`<div class="banner banner-error">${escapeHtml(err.message)}</div>`));
+    } finally {
+      submitBtn.disabled = false;
+    }
+  };
+}
+
+/* ---------------------------- render: feed ---------------------------- */
+
+function stampMarkup(isPrivate) {
+  const cls = isPrivate ? 'private' : 'public';
+  const label = isPrivate ? 'Private' : 'Public';
+  return `
+    <div class="stamp ${cls}">
+      <b>${label}</b>
+    </div>
+  `;
+}
+
+function renderFeed() {
+  root.innerHTML = '';
+  const wrap = el(`<div></div>`);
+
+  wrap.appendChild(el(`
+    <div class="feed-toolbar">
+      <span class="feed-title">The feed</span>
+    </div>
+  `));
+
+  if (state.error) {
+    wrap.appendChild(el(`<div class="banner banner-error">${escapeHtml(state.error)}</div>`));
+  }
+
+  if (state.loading) {
+    wrap.appendChild(el(`<div class="loading-row">Turning the pages…</div>`));
+    root.appendChild(wrap);
+    return;
+  }
+
+  if (!state.boards.length) {
+    wrap.appendChild(el(`
+      <div class="empty-state">
+        <div class="stamp public" style="margin:0 auto 16px;"><b>Empty</b></div>
+        <h3>Nothing logged yet</h3>
+        <p>Be the first to write an entry.</p>
+      </div>
+    `));
+    root.appendChild(wrap);
+    return;
+  }
+
+  const list = el(`<div class="entry-list"></div>`);
+  state.boards.forEach(b => {
+    const card = el(`
+      <article class="entry-card transition">
+        <div class="entry-meta-row">
+          <span class="entry-meta"><span class="author">${authorLabel(b.author_id)}</span></span>
+          ${stampMarkup(b.is_private)}
+        </div>
+        <h3>${escapeHtml(b.title)}</h3>
+        <p class="entry-excerpt">${escapeHtml((b.content || '').slice(0, 160))}${(b.content || '').length > 160 ? '…' : ''}</p>
+      </article>
+    `);
+    card.onclick = () => navigate({ name: 'detail', id: b.id });
+    list.appendChild(card);
+  });
+  wrap.appendChild(list);
+  root.appendChild(wrap);
+}
+
+async function loadFeed() {
+  state.loading = true;
+  state.error = null;
+  renderFeed();
+  try {
+    state.boards = await api('/weblog');
+  } catch (err) {
+    state.error = err.message;
+    state.boards = [];
+    if (!state.user) { renderAuth(); return; }
+  } finally {
+    state.loading = false;
+  }
+}
+
+/* ---------------------------- render: detail ---------------------------- */
+
+async function renderDetail(id) {
+  root.innerHTML = '';
+  root.appendChild(el(`<div class="loading-row">Opening the page…</div>`));
+  let b, comments;
+  try {
+    // The backend has no "board with comments embedded" response — these
+    // are two separate calls (GET /weblog/:id and GET /weblog/:id/comment).
+    [b, comments] = await Promise.all([
+      api(`/weblog/${id}`),
+      api(`/weblog/${id}/comment`).catch(() => []), // tolerate empty/absent list
+    ]);
+    state.detail = b;
+    state.comments = comments || [];
+  } catch (err) {
+    root.innerHTML = '';
+    root.appendChild(el(`
+      <a href="#" class="back-link" id="back">← Back to feed</a>
+      <div class="banner banner-error">${escapeHtml(err.message)}</div>
+    `));
+    root.querySelector('#back').onclick = (e) => { e.preventDefault(); navigate({ name: 'feed' }); };
+    return;
+  }
+
+  const isOwner = state.user && state.user.id === b.author_id;
+
+  root.innerHTML = '';
+  const wrap = el(`
+    <div class="entry-detail">
+      <a href="#" class="back-link" id="back">← Back to feed</a>
+      <div class="entry-header">
+        <h1>${escapeHtml(b.title)}</h1>
+        ${stampMarkup(b.is_private)}
+      </div>
+      <span class="entry-meta">${authorLabel(b.author_id)}</span>
+      ${b.img_path ? `<img class="entry-image" src="${escapeHtml(b.img_path)}" alt="">` : ''}
+      <p class="entry-body">${escapeHtml(b.content)}</p>
+      <div class="entry-actions">
+        ${isOwner ? `<button class="btn btn-brass" id="btn-share">Share</button>` : ''}
+        ${isOwner ? `<button class="btn btn-clay" id="btn-delete">Delete entry</button>` : ''}
+      </div>
+      <div class="margin-header">
+        <h2>Marginalia</h2>
+        <span class="margin-count">${state.comments.length} note${state.comments.length === 1 ? '' : 's'}</span>
+      </div>
+      <div id="notes-list"></div>
+      <div id="notes-form-slot"></div>
+    </div>
+  `);
+  root.appendChild(wrap);
+
+  wrap.querySelector('#back').onclick = (e) => { e.preventDefault(); navigate({ name: 'feed' }); };
+  if (isOwner) {
+    wrap.querySelector('#btn-delete').onclick = () => deleteBoard(b.id);
+    wrap.querySelector('#btn-share').onclick = () => openShareModal(b.id);
+  }
+
+  const notesList = wrap.querySelector('#notes-list');
+  state.comments.forEach(c => {
+    const canDelete = state.user && state.user.id === c.author_id;
+    const note = el(`
+      <div class="note">
+        <div class="note-meta">${authorLabel(c.author_id)}${canDelete ? ' <button class="btn-ghost" style="border:none;padding:0 0 0 8px;text-transform:none;font-size:11px;" data-del>remove</button>' : ''}</div>
+        <p class="note-text">${escapeHtml(c.content)}</p>
+      </div>
+    `);
+    if (canDelete) {
+      note.querySelector('[data-del]').onclick = () => deleteComment(b.id, c.id);
+    }
+    notesList.appendChild(note);
+  });
+
+  const formSlot = wrap.querySelector('#notes-form-slot');
+  if (state.user) {
+    const form = el(`
+      <form class="note-form" id="note-form">
+        <textarea id="note-text" placeholder="Write a note in the margin…" required></textarea>
+        <div class="note-form-footer">
+          <button type="submit" class="btn btn-brass">Add note</button>
+        </div>
+      </form>
+    `);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const textarea = form.querySelector('#note-text');
+      const content = textarea.value.trim();
+      if (!content) return;
+      const btn = form.querySelector('button');
+      btn.disabled = true;
+      try {
+        await api(`/weblog/${b.id}/comment`, { method: 'POST', body: { content } });
+        textarea.value = '';
+        renderDetail(b.id);
+      } catch (err) {
+        form.insertAdjacentElement('beforebegin', el(`<div class="banner banner-error">${escapeHtml(err.message)}</div>`));
+      } finally {
+        btn.disabled = false;
+      }
+    };
+    formSlot.appendChild(form);
+  } else {
+    formSlot.appendChild(el(`<div class="signin-prompt">Log in to leave a note in the margin.</div>`));
+  }
+}
+
+async function deleteComment(boardId, commentId) {
+  if (!confirm('Remove this note?')) return;
+  try {
+    await api(`/weblog/${boardId}/comment/${commentId}`, { method: 'DELETE' });
+    renderDetail(boardId);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function deleteBoard(id) {
+  if (!confirm('Delete this entry? This can\'t be undone.')) return;
+  try {
+    await api(`/weblog/${id}`, { method: 'DELETE' });
+    await loadFeed();
+    navigate({ name: 'feed' });
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+/* ---------------------------- share modal ---------------------------- */
+
+function openShareModal(boardId) {
+  modalRoot.innerHTML = '';
+  const overlay = el(`
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <h2 class="modal-title">Share this entry</h2>
+        <div id="share-error"></div>
+        <form id="share-form">
+          <div class="field">
+            <label for="s-usernames">Share with (usernames)</label>
+            <input type="text" id="s-usernames" placeholder="alice, bob" required>
+            <span class="field-hint">Comma-separated usernames.</span>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" id="btn-cancel">Cancel</button>
+            <button type="submit" class="btn btn-brass" id="btn-share-submit">Share</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+  modalRoot.appendChild(overlay);
+  overlay.querySelector('#btn-cancel').onclick = () => modalRoot.innerHTML = '';
+  overlay.onclick = (e) => { if (e.target === overlay) modalRoot.innerHTML = ''; };
+
+  overlay.querySelector('#share-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const errSlot = overlay.querySelector('#share-error');
+    const btn = overlay.querySelector('#btn-share-submit');
+    const usernames = overlay.querySelector('#s-usernames').value
+      .split(',').map(s => s.trim()).filter(Boolean);
+    if (!usernames.length) return;
+    btn.disabled = true;
+    errSlot.innerHTML = '';
+    try {
+      // Response keys come straight from the backend as written:
+      // { "founded seccusfully": [...], "not founded": [...] }
+      const res = await shareBoard(boardId, usernames);
+      const notFound = res['not founded'] || [];
+      if (notFound.length) {
+        errSlot.appendChild(el(`<div class="banner banner-info">Couldn't find: ${escapeHtml(notFound.join(', '))}</div>`));
+      }
+      const found = res['founded seccusfully'] || [];
+      if (found.length && !notFound.length) {
+        modalRoot.innerHTML = '';
+      }
+    } catch (err) {
+      errSlot.appendChild(el(`<div class="banner banner-error">${escapeHtml(err.message)}</div>`));
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
+function shareBoard(boardId, usernames) {
+  return api(`/weblog/${boardId}/share`, { method: 'POST', body: { usernames } });
+}
+
+/* ---------------------------- new entry modal ---------------------------- */
+
+function openNewEntryModal() {
+  modalRoot.innerHTML = '';
+  const overlay = el(`
+    <div class="modal-overlay">
+      <div class="modal-card">
+        <h2 class="modal-title">New entry</h2>
+        <div id="modal-error"></div>
+        <form id="entry-form">
+          <div class="field">
+            <label for="e-title">Title</label>
+            <input type="text" id="e-title" required>
+          </div>
+          <div class="field">
+            <label for="e-content">Content</label>
+            <textarea id="e-content" required></textarea>
+          </div>
+          <div class="field">
+            <label for="e-image">Image path or URL (optional)</label>
+            <input type="text" id="e-image" placeholder="/static/img/whatever.jpg">
+            <span class="field-hint">There's no image upload — this is stored as a plain path/URL.</span>
+          </div>
+          <div class="field">
+            <div class="toggle-row">
+              <span class="toggle-label">Privacy</span>
+              <label class="switch">
+                <input type="checkbox" id="e-private">
+                <span class="track"></span>
+              </label>
+              <span class="privacy-state" id="privacy-label">Public — anyone can read this</span>
+            </div>
+          </div>
+          <div class="field hidden" id="shared-field">
+            <label for="e-shared">Share with (usernames)</label>
+            <input type="text" id="e-shared" placeholder="alice, bob">
+            <span class="field-hint">Comma-separated. Only you and these people can view this entry.</span>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" id="btn-cancel">Cancel</button>
+            <button type="submit" class="btn btn-brass" id="btn-publish">Publish</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+  modalRoot.appendChild(overlay);
+
+  const privateToggle = overlay.querySelector('#e-private');
+  const privacyLabel = overlay.querySelector('#privacy-label');
+  const sharedField = overlay.querySelector('#shared-field');
+  privateToggle.onchange = () => {
+    const isPrivate = privateToggle.checked;
+    privacyLabel.textContent = isPrivate
+      ? 'Private — only you and people you share with'
+      : 'Public — anyone can read this';
+    privacyLabel.classList.toggle('is-private', isPrivate);
+    sharedField.classList.toggle('hidden', !isPrivate);
+  };
+
+  overlay.querySelector('#btn-cancel').onclick = () => modalRoot.innerHTML = '';
+  overlay.onclick = (e) => { if (e.target === overlay) modalRoot.innerHTML = ''; };
+
+  overlay.querySelector('#entry-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = overlay.querySelector('#btn-publish');
+    const errSlot = overlay.querySelector('#modal-error');
+    btn.disabled = true;
+    errSlot.innerHTML = '';
+
+    const isPrivate = privateToggle.checked;
+    const payload = {
+      title: overlay.querySelector('#e-title').value.trim(),
+      content: overlay.querySelector('#e-content').value.trim(),
+      is_private: isPrivate,
+      img_path: overlay.querySelector('#e-image').value.trim(),
+    };
+
+    try {
+      // POST /weblog is plain JSON — there's no multipart file upload on
+      // this backend.
+      const board = await api('/weblog', { method: 'POST', body: payload });
+
+      if (isPrivate) {
+        const usernames = overlay.querySelector('#e-shared').value
+          .split(',').map(s => s.trim()).filter(Boolean);
+        if (usernames.length) {
+          // Sharing is a separate call against the board we just created.
+          await shareBoard(board.id, usernames).catch(() => { /* best effort here; can retry from the entry page */ });
+        }
+      }
+
+      modalRoot.innerHTML = '';
+      await loadFeed();
+      navigate({ name: 'feed' });
+    } catch (err) {
+      errSlot.appendChild(el(`<div class="banner banner-error">${escapeHtml(err.message)}</div>`));
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
+/* ---------------------------- auth actions ---------------------------- */
+
+function logout() {
+  // No /logout route on the backend — this is purely a client-side
+  // token drop.
+  AUTH_TOKEN = null;
+  state.user = null;
+  state.boards = [];
+  clearStoredAuth();
+  renderHeader();
+  renderAuth();
+}
+
+/* ---------------------------- routing ---------------------------- */
+
+function navigate(route) {
+  state.route = route;
+  renderRoute();
+}
+
+function renderRoute() {
+  if (!state.user) { renderAuth(); return; }
+  if (state.route.name === 'detail') {
+    renderDetail(state.route.id);
+  } else {
+    renderFeed();
+  }
+}
+
+/* ---------------------------- boot ---------------------------- */
+
+(async function boot() {
+  renderHeader();
+  if (state.user) {
+    // There's no GET /me to validate the stored token up front, so we
+    // optimistically trust it and let loadFeed's 401 handling clear it
+    // if it turns out to be stale/invalid.
+    await loadFeed();
+  } else {
+    state.loading = false;
+  }
+  renderRoute();
+})();
