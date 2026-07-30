@@ -1,8 +1,9 @@
 /* ==========================================================================
    Marginalia — app logic
    Vanilla JS, no build step. See config.js for the real API contract this
-   backend exposes (auth is bearer-token only, boards have no created_at
-   and no username — just a numeric author_id, etc).
+   backend exposes (auth is bearer-token only, boards have no created_at,
+   etc). Feed boards do include author_username; the single-board detail
+   endpoint currently does not (see boardAuthorLabel / authorLabel).
    ========================================================================== */
 
 const API_BASE = (window.MARGINALIA_CONFIG && window.MARGINALIA_CONFIG.API_BASE) || '';
@@ -51,7 +52,7 @@ const modalRoot = document.getElementById('modal-root');
 
 /* ---------------------------- API wrapper ---------------------------- */
 
-async function api(path, { method = 'GET', body } = {}) {
+async function api(path, { method = 'GET', body, returnResponse = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
 
@@ -78,7 +79,9 @@ async function api(path, { method = 'GET', body } = {}) {
     const msg = (data && (data.message || data.error)) || `Request failed (${res.status})`;
     throw new Error(msg);
   }
-  return data;
+  // Some endpoints (feed pagination) need a response header, not just the
+  // parsed body — opt in per call so every other call site is unaffected.
+  return returnResponse ? { data, res } : data;
 }
 
 /* ---------------------------- helpers ---------------------------- */
@@ -95,15 +98,20 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
-// The backend never sends a username for a board author — only author_id.
-// We only know our own logged-in username locally, so that's the one case
-// we can label with a handle; everyone else shows as "User #<id>".
-// Comments are different: the backend now includes author_username
-// directly on each comment, so commentAuthorLabel() below uses that
-// instead of falling back to the id.
+// Fallback for when we only have an author_id and no username to go with
+// it. We only know our own logged-in username locally, so that's the one
+// case we can label with a handle; everyone else shows as "User #<id>".
 function authorLabel(authorId) {
   if (state.user && state.user.id === authorId) return `@${escapeHtml(state.user.username)}`;
   return `User #${authorId}`;
+}
+
+// Boards from the feed (GET /weblog) come back with an author_username
+// field from the backend, so we show the real handle instead of the
+// numeric id.
+function boardAuthorLabel(board) {
+  if (board.author_username) return `@${escapeHtml(board.author_username)}`;
+  return authorLabel(board.author_id);
 }
 
 // Comments come back with an author_username field from the backend now,
@@ -250,7 +258,7 @@ function renderFeed() {
       state.search = value.trim();
       state.page = 1;
       loadFeed();
-    }, 300);
+    }, 700);
   };
   if (wasSearchFocused) {
     searchInput.focus();
@@ -271,10 +279,13 @@ function renderFeed() {
     wrap.appendChild(el(`
       <div class="empty-state">
         <div class="stamp public" style="margin:0 auto 16px;"><b>Empty</b></div>
-        <h3>${state.search ? 'No entries match your search' : 'Nothing logged yet'}</h3>
-        <p>${state.search ? 'Try a different search term.' : 'Be the first to write an entry.'}</p>
+        <h3>${state.page > 1 ? 'Nothing on this page' : (state.search ? 'No entries match your search' : 'Nothing logged yet')}</h3>
+        <p>${state.page > 1 ? 'You\'ve gone past the last entry.' : (state.search ? 'Try a different search term.' : 'Be the first to write an entry.')}</p>
       </div>
     `));
+    if (state.page > 1) {
+      wrap.appendChild(buildPagination());
+    }
     root.appendChild(wrap);
     return;
   }
@@ -284,7 +295,7 @@ function renderFeed() {
     const card = el(`
       <article class="entry-card transition">
         <div class="entry-meta-row">
-          <span class="entry-meta"><span class="author">${authorLabel(b.author_id)}</span></span>
+          <span class="entry-meta"><span class="author">${boardAuthorLabel(b)}</span></span>
           ${stampMarkup(b.is_private)}
         </div>
         <h3>${escapeHtml(b.title)}</h3>
@@ -295,7 +306,12 @@ function renderFeed() {
     list.appendChild(card);
   });
   wrap.appendChild(list);
+  wrap.appendChild(buildPagination());
 
+  root.appendChild(wrap);
+}
+
+function buildPagination() {
   const pagination = el(`
     <div class="pagination">
       <button class="btn btn-ghost" id="btn-prev-page">← Prev</button>
@@ -317,9 +333,7 @@ function renderFeed() {
     state.page += 1;
     loadFeed();
   };
-  wrap.appendChild(pagination);
-
-  root.appendChild(wrap);
+  return pagination;
 }
 
 async function loadFeed() {
@@ -332,11 +346,12 @@ async function loadFeed() {
     // user's term in wildcards for partial matching; an empty term is
     // left out and the backend defaults to matching everything.
     if (state.search) params.set('search', `%${state.search}%`);
-    const boards = await api(`/weblog?${params.toString()}`);
+    const { data: boards, res } = await api(`/weblog?${params.toString()}`, { returnResponse: true });
     state.boards = boards || [];
-    // No total count comes back from the backend — infer whether another
-    // page exists from whether this one came back full.
-    state.hasNextPage = state.boards.length === FEED_PAGE_SIZE;
+    // The backend now tells us directly (via X-Has-Next) whether a real
+    // next page exists, instead of us guessing from a full page — a full
+    // page doesn't always mean there's more (e.g. exactly 10 boards total).
+    state.hasNextPage = res.headers.get('Next-Page') === 'true';
   } catch (err) {
     state.error = err.message;
     state.boards = [];
