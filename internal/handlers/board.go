@@ -11,6 +11,7 @@ import (
 type BoardHandler struct {
 	BoardRepo      *repository.BoardRepository
 	BoardShareRepo *repository.BoardShareRepository
+	UserRepo       *repository.UserRepository
 }
 
 type CreateBoardReq struct {
@@ -20,10 +21,11 @@ type CreateBoardReq struct {
 	ImgPath   string `json:"img_path"`
 }
 
-func NewBoardHandler(br *repository.BoardRepository, bsr *repository.BoardShareRepository) *BoardHandler {
+func NewBoardHandler(br *repository.BoardRepository, bsr *repository.BoardShareRepository, ur *repository.UserRepository) *BoardHandler {
 	boardHandler := &BoardHandler{
 		BoardRepo:      br,
 		BoardShareRepo: bsr,
+		UserRepo:       ur,
 	}
 
 	return boardHandler
@@ -67,8 +69,21 @@ func (bh *BoardHandler) Feed(c *echo.Context) error {
 	}
 
 	list, err := bh.BoardRepo.ListFeed(c.Request().Context(), userID, page, search)
+
+	hasNext := len(list) > 10
+
+	if hasNext {
+		list = list[:10]
+	}
+	c.Response().Header().Set("Next-Page", strconv.FormatBool(hasNext))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get feed")
+	}
+	for _, brd := range list {
+		brd.AuthorUsername, err = bh.UserRepo.GetUsernameByID(c.Request().Context(), brd.AuthorID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "some internal problem in server")
+		}
 	}
 	return c.JSON(http.StatusOK, list)
 }
