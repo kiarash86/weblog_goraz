@@ -47,11 +47,11 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
 	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo)
 	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
-	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo , userRepo)
+	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo, userRepo)
 
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"https://goraz-weblog.netlify.app/"},
+		AllowOrigins: []string{"https://goraz-weblog.netlify.app"},
 		AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type", "Authorization"},
 	}))
