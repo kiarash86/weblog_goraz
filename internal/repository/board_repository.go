@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"weblog/internal/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -50,6 +52,9 @@ func (ur *BoardRepository) FindByID(ctx context.Context, id int) (*models.Board,
 		&board.ID, &board.AuthorID, &board.Title, &board.Content, &board.ISPrivate, &board.ImagePath,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &board, nil
@@ -67,8 +72,8 @@ func (ur *BoardRepository) IsOwner(ctx context.Context, boardID int, userID int)
 }
 
 func (ur *BoardRepository) ListFeed(ctx context.Context, userID int, page int, search string) (boards []*models.Board, err error) {
-	limit := 10
-	offset := (page - 1) * limit
+	limit := 11
+	offset := (page - 1) * (limit - 1)
 
 	query := `
 	SELECT id, author_id, title, content, is_private, img_path
