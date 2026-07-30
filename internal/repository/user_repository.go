@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"weblog/internal/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -76,6 +78,9 @@ func (ur *UserRepository) FindByUserName(ctx context.Context, username string) (
 		&user.ID, &user.UserName, &user.Password,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &user, nil
