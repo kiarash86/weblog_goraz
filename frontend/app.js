@@ -2,8 +2,8 @@
    Marginalia — app logic
    Vanilla JS, no build step. See config.js for the real API contract this
    backend exposes (auth is bearer-token only, boards have no created_at,
-   etc). Feed boards do include author_username; the single-board detail
-   endpoint currently does not (see boardAuthorLabel / authorLabel).
+   etc). Both the feed and the single-board detail endpoint include
+   author_username now (see boardAuthorLabel).
    ========================================================================== */
 
 const API_BASE = (window.MARGINALIA_CONFIG && window.MARGINALIA_CONFIG.API_BASE) || '';
@@ -398,7 +398,7 @@ async function renderDetail(id) {
         <h1>${escapeHtml(b.title)}</h1>
         ${stampMarkup(b.is_private)}
       </div>
-      <span class="entry-meta">${authorLabel(b.author_id)}</span>
+      <span class="entry-meta">${boardAuthorLabel(b)}</span>
       ${b.img_path ? `<img class="entry-image" src="${escapeHtml(b.img_path)}" alt="">` : ''}
       <p class="entry-body">${escapeHtml(b.content)}</p>
       <div class="entry-actions">

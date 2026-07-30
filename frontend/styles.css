@@ -47,8 +47,13 @@ html {
      this, a page with <=10 entries (no scrollbar) is a few px wider
      than a page with pagination showing (scrollbar appears), so the
      centered feed column — and every post card in it — visibly
-     shrinks the moment pagination kicks in. */
+     shrinks the moment pagination kicks in (feed) or a long comment
+     list makes the page taller (board detail).
+     scrollbar-gutter only has an effect when overflow isn't "visible",
+     which is the default for html/body — so it needs overflow-y set
+     here too, or the gutter reservation is silently ignored. */
   scrollbar-gutter: stable;
+  overflow-y: auto;
 }
 
 body {
