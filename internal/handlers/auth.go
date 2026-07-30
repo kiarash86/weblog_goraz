@@ -78,10 +78,14 @@ func (ah *AuthHandler) Login(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	if user == nil{
+			return echo.NewHTTPError(http.StatusUnauthorized, "invalid username or pass")
+
+	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(login.Password))
 	if err != nil {
-		return err
+			return echo.NewHTTPError(http.StatusUnauthorized, "invalid username or pass")
 	}
 
 	claims := auth.CreateClaims(user.ID)
