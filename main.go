@@ -45,10 +45,10 @@ func main() {
 	_ = boardShareRepo
 
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
-	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo  , userRepo)
+	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo, userRepo)
 	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
 	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo, userRepo)
-
+	uploadHandler := handlers.NewUploadHandler()
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:  []string{"https://goraz-weblog.netlify.app"},
@@ -63,7 +63,7 @@ func main() {
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
-
+	e.Static("/uploads", "uploads")
 	e.POST("/signup", authHandler.SignUp)
 	e.POST("/login", authHandler.Login)
 
@@ -71,6 +71,7 @@ func main() {
 	protected.GET("/weblog", boardHandler.Feed)
 	protected.GET("/weblog/:id", boardHandler.GetByID)
 	protected.POST("/weblog", boardHandler.Create)
+	protected.POST("/upload", uploadHandler.Upload)
 	protected.POST("/weblog/:id/share", boardShareHandler.Add)
 	protected.GET("/weblog/:id/comment", commentHandler.ListCommentsOfBoard)
 	protected.POST("/weblog/:id/comment", commentHandler.Create)
