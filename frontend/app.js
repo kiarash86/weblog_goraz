@@ -84,6 +84,31 @@ async function api(path, { method = 'GET', body, returnResponse = false } = {}) 
   return returnResponse ? { data, res } : data;
 }
 
+async function uploadImage(file) {
+  const headers = {};
+  if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+  // NOTE: no Content-Type header here on purpose — the browser sets the
+  // multipart boundary itself. Setting it manually breaks the upload.
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const res = await fetch(`${API_BASE}/upload`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* empty body */ }
+
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `Upload failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data.path;
+}
+
 /* ---------------------------- helpers ---------------------------- */
 
 function escapeHtml(str) {
@@ -569,9 +594,9 @@ function openNewEntryModal() {
             <textarea id="e-content" required></textarea>
           </div>
           <div class="field">
-            <label for="e-image">Image path or URL (optional)</label>
-            <input type="text" id="e-image" placeholder="/static/img/whatever.jpg">
-            <span class="field-hint">There's no image upload — this is stored as a plain path/URL.</span>
+            <label for="e-image">Image (optional)</label>
+            <input type="file" id="e-image" accept="image/png,image/jpeg,image/gif,image/webp">
+            <span class="field-hint" id="e-image-status">JPG, PNG, GIF or WEBP, up to 5MB.</span>
           </div>
           <div class="field">
             <div class="toggle-row">
@@ -621,16 +646,24 @@ function openNewEntryModal() {
     errSlot.innerHTML = '';
 
     const isPrivate = privateToggle.checked;
-    const payload = {
-      title: overlay.querySelector('#e-title').value.trim(),
-      content: overlay.querySelector('#e-content').value.trim(),
-      is_private: isPrivate,
-      img_path: overlay.querySelector('#e-image').value.trim(),
-    };
+    const imageFile = overlay.querySelector('#e-image').files[0];
+    const imageStatus = overlay.querySelector('#e-image-status');
 
     try {
-      // POST /weblog is plain JSON — there's no multipart file upload on
-      // this backend.
+      let imgPath = '';
+      if (imageFile) {
+        imageStatus.textContent = 'Uploading image…';
+        imgPath = await uploadImage(imageFile);
+        imageStatus.textContent = 'Image uploaded.';
+      }
+
+      const payload = {
+        title: overlay.querySelector('#e-title').value.trim(),
+        content: overlay.querySelector('#e-content').value.trim(),
+        is_private: isPrivate,
+        img_path: imgPath,
+      };
+
       const board = await api('/weblog', { method: 'POST', body: payload });
 
       if (isPrivate) {

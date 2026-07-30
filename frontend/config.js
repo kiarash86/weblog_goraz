@@ -17,6 +17,7 @@
    GET    {BASE}/weblog/:id/comment                          -> 200 [ Comment ]
    POST   {BASE}/weblog/:id/comment  { content }              -> 201 Comment
    DELETE {BASE}/weblog/:id/comment/:commentId                -> 204
+   POST   {BASE}/upload        multipart "image" field       -> 201 { path }
 
    Board = { id, author_id, title, content, is_private, img_path }
    Comment = { id, author_id, board_id, content }
@@ -27,8 +28,9 @@
      no "look up username by id" endpoint, so people are shown as
      "User #<id>" rather than "@handle" everywhere except the person
      currently logged in (whose own username we already know locally).
-   - No image upload — img_path is just a plain text field (a path or
-     URL you type in), not a file upload.
+   - Image upload is a separate step: pick a file, it's POSTed to /upload
+     as multipart/form-data, and the returned {path} is what's sent as
+     img_path when creating the board. Max 5MB, jpg/png/gif/webp only.
    - No GET /me and no /logout route — auth is a bare bearer token with
      no session-check endpoint, so the frontend persists the token and
      the user's own {id, username} in localStorage after login/signup
