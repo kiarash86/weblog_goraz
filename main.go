@@ -45,15 +45,16 @@ func main() {
 	_ = boardShareRepo
 
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
-	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo)
+	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo  , userRepo)
 	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
 	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo, userRepo)
 
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"https://goraz-weblog.netlify.app"},
-		AllowMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Content-Type", "Authorization"},
+		AllowOrigins:  []string{"https://goraz-weblog.netlify.app"},
+		AllowMethods:  []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Content-Type", "Authorization"},
+		ExposeHeaders: []string{"Next-Page"},
 	}))
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
