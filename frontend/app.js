@@ -30,6 +30,8 @@ function clearStoredAuth() {
 const stored = loadStoredAuth();
 let AUTH_TOKEN = stored ? stored.token : null;
 
+const FEED_PAGE_SIZE = 10; // matches the backend's fixed LIMIT per page
+
 const state = {
   user: stored ? stored.user : null, // { id, username } | null
   route: { name: 'feed' }, // {name:'feed'} | {name:'detail', id}
@@ -38,6 +40,9 @@ const state = {
   comments: [],
   loading: true,
   error: null,
+  page: 1,
+  search: '', // raw text the user typed, no wildcards
+  hasNextPage: false, // inferred: true if the last page came back full
 };
 
 const root = document.getElementById('main-root');
@@ -90,13 +95,22 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
-// The backend never sends a username for a board/comment author — only
-// author_id. We only know our own logged-in username locally, so that's
-// the one case we can label with a handle; everyone else shows as
-// "User #<id>".
+// The backend never sends a username for a board author — only author_id.
+// We only know our own logged-in username locally, so that's the one case
+// we can label with a handle; everyone else shows as "User #<id>".
+// Comments are different: the backend now includes author_username
+// directly on each comment, so commentAuthorLabel() below uses that
+// instead of falling back to the id.
 function authorLabel(authorId) {
   if (state.user && state.user.id === authorId) return `@${escapeHtml(state.user.username)}`;
   return `User #${authorId}`;
+}
+
+// Comments come back with an author_username field from the backend now,
+// so we can show the real handle instead of "User #<id>".
+function commentAuthorLabel(comment) {
+  if (comment.author_username) return `@${escapeHtml(comment.author_username)}`;
+  return authorLabel(comment.author_id);
 }
 
 /* ---------------------------- render: header ---------------------------- */
@@ -211,14 +225,37 @@ function stampMarkup(isPrivate) {
 }
 
 function renderFeed() {
+  // Was the search box focused before this re-render? Re-renders happen
+  // on every keystroke (via loadFeed), pagination click, and initial
+  // load — we only want to restore focus/caret for the first case.
+  const wasSearchFocused = document.activeElement && document.activeElement.id === 'feed-search';
+  const caretPos = wasSearchFocused ? document.activeElement.selectionStart : null;
+
   root.innerHTML = '';
   const wrap = el(`<div></div>`);
 
   wrap.appendChild(el(`
     <div class="feed-toolbar">
       <span class="feed-title">The feed</span>
+      <input type="search" class="search-input" id="feed-search" placeholder="Search titles…" value="${escapeHtml(state.search)}">
     </div>
   `));
+
+  const searchInput = wrap.querySelector('#feed-search');
+  let searchDebounce;
+  searchInput.oninput = () => {
+    clearTimeout(searchDebounce);
+    const value = searchInput.value;
+    searchDebounce = setTimeout(() => {
+      state.search = value.trim();
+      state.page = 1;
+      loadFeed();
+    }, 300);
+  };
+  if (wasSearchFocused) {
+    searchInput.focus();
+    searchInput.setSelectionRange(caretPos, caretPos);
+  }
 
   if (state.error) {
     wrap.appendChild(el(`<div class="banner banner-error">${escapeHtml(state.error)}</div>`));
@@ -234,8 +271,8 @@ function renderFeed() {
     wrap.appendChild(el(`
       <div class="empty-state">
         <div class="stamp public" style="margin:0 auto 16px;"><b>Empty</b></div>
-        <h3>Nothing logged yet</h3>
-        <p>Be the first to write an entry.</p>
+        <h3>${state.search ? 'No entries match your search' : 'Nothing logged yet'}</h3>
+        <p>${state.search ? 'Try a different search term.' : 'Be the first to write an entry.'}</p>
       </div>
     `));
     root.appendChild(wrap);
@@ -258,6 +295,30 @@ function renderFeed() {
     list.appendChild(card);
   });
   wrap.appendChild(list);
+
+  const pagination = el(`
+    <div class="pagination">
+      <button class="btn btn-ghost" id="btn-prev-page">← Prev</button>
+      <span class="pagination-page">Page ${state.page}</span>
+      <button class="btn btn-ghost" id="btn-next-page">Next →</button>
+    </div>
+  `);
+  const prevBtn = pagination.querySelector('#btn-prev-page');
+  const nextBtn = pagination.querySelector('#btn-next-page');
+  prevBtn.disabled = state.page <= 1;
+  nextBtn.disabled = !state.hasNextPage;
+  prevBtn.onclick = () => {
+    if (state.page <= 1) return;
+    state.page -= 1;
+    loadFeed();
+  };
+  nextBtn.onclick = () => {
+    if (!state.hasNextPage) return;
+    state.page += 1;
+    loadFeed();
+  };
+  wrap.appendChild(pagination);
+
   root.appendChild(wrap);
 }
 
@@ -266,13 +327,24 @@ async function loadFeed() {
   state.error = null;
   renderFeed();
   try {
-    state.boards = await api('/weblog');
+    const params = new URLSearchParams({ page: String(state.page) });
+    // The backend does a raw ILIKE with whatever we send, so wrap the
+    // user's term in wildcards for partial matching; an empty term is
+    // left out and the backend defaults to matching everything.
+    if (state.search) params.set('search', `%${state.search}%`);
+    const boards = await api(`/weblog?${params.toString()}`);
+    state.boards = boards || [];
+    // No total count comes back from the backend — infer whether another
+    // page exists from whether this one came back full.
+    state.hasNextPage = state.boards.length === FEED_PAGE_SIZE;
   } catch (err) {
     state.error = err.message;
     state.boards = [];
+    state.hasNextPage = false;
     if (!state.user) { renderAuth(); return; }
   } finally {
     state.loading = false;
+    renderFeed();
   }
 }
 
@@ -339,7 +411,7 @@ async function renderDetail(id) {
     const canDelete = state.user && state.user.id === c.author_id;
     const note = el(`
       <div class="note">
-        <div class="note-meta">${authorLabel(c.author_id)}${canDelete ? ' <button class="btn-ghost" style="border:none;padding:0 0 0 8px;text-transform:none;font-size:11px;" data-del>remove</button>' : ''}</div>
+        <div class="note-meta">${commentAuthorLabel(c)}${canDelete ? ' <button class="btn-ghost" style="border:none;padding:0 0 0 8px;text-transform:none;font-size:11px;" data-del>remove</button>' : ''}</div>
         <p class="note-text">${escapeHtml(c.content)}</p>
       </div>
     `);
