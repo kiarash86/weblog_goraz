@@ -53,8 +53,20 @@ func (bh *BoardHandler) Create(c *echo.Context) error {
 
 func (bh *BoardHandler) Feed(c *echo.Context) error {
 	userID := c.Get("user_id").(int)
+	page, err := strconv.Atoi(c.QueryParam("page"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "couldnt get page")
+	}
+	if page == 0 {
+		page = 1
+	}
+	search := c.QueryParam("search")
 
-	list, err := bh.BoardRepo.ListFeed(c.Request().Context(), userID)
+	if search == "" {
+		search = "%%"
+	}
+
+	list, err := bh.BoardRepo.ListFeed(c.Request().Context(), userID, page, search)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get feed")
 	}
