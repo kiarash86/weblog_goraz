@@ -29,6 +29,7 @@ func (ur *BoardShareRepository) Add( ctx context.Context, userID int ,  boardID 
 		`
 		INSERT INTO board_shares (user_id, board_id)
 		VALUES ($1, $2)
+		ON CONFLICT (user_id, board_id) DO NOTHING
 		RETURNING user_id, board_id
 		`
 
