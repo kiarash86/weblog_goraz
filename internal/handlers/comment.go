@@ -12,17 +12,19 @@ type CommentHandler struct {
 	BoardRepo      *repository.BoardRepository
 	BoardShareRepo *repository.BoardShareRepository
 	CommentRepo    *repository.CommentRepository
+	UserRepo       *repository.UserRepository
 }
 
 type CreateCommentdReq struct {
 	Content string `json:"content"`
 }
 
-func NewCommentHandler(br *repository.BoardRepository, bsr *repository.BoardShareRepository, rc *repository.CommentRepository) *CommentHandler {
+func NewCommentHandler(br *repository.BoardRepository, bsr *repository.BoardShareRepository, rc *repository.CommentRepository , ur *repository.UserRepository) *CommentHandler {
 	commentHandler := &CommentHandler{
 		BoardRepo:      br,
 		BoardShareRepo: bsr,
-		CommentRepo:    rc,
+		CommentRepo:    rc, 
+		UserRepo:        ur ,
 	}
 
 	return commentHandler
@@ -102,6 +104,12 @@ boardID, err := strconv.Atoi(c.Param("id"))
 	list, err := ch.CommentRepo.ListCommentsOfBoard(c.Request().Context(), boardID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get feed")
+	}
+	for _ , com := range list {
+		com.AuthorUsername ,err = ch.UserRepo.GetUsernameByID(c.Request().Context() , com.AuthorID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "some internal problem in server")
+		}
 	}
 	return c.JSON(http.StatusOK, list)
 }
