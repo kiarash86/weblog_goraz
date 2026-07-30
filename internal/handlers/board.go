@@ -104,6 +104,11 @@ func (bh *BoardHandler) GetByID(c *echo.Context) error {
 	if board == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "board not found")
 	}
+		board.AuthorUsername, err = bh.UserRepo.GetUsernameByID(c.Request().Context(), board.AuthorID)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get username for board")
+
+			}
 	if board.ISPrivate {
 		isOwner, err := bh.BoardRepo.IsOwner(c.Request().Context(), boardID, userID)
 		if err != nil {
@@ -111,18 +116,7 @@ func (bh *BoardHandler) GetByID(c *echo.Context) error {
 
 		}
 		if isOwner {
-			board, err := bh.BoardRepo.FindByID(c.Request().Context(), boardID)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get board")
-
-			}
-			board.AuthorUsername, err = bh.UserRepo.GetUsernameByID(c.Request().Context(), board.AuthorID)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get username for board")
-
-			}
 			return c.JSON(http.StatusOK, board)
-
 		}
 		hasAccess, err := bh.BoardShareRepo.HasAccess(c.Request().Context(), userID, boardID)
 		if err != nil {
@@ -131,12 +125,6 @@ func (bh *BoardHandler) GetByID(c *echo.Context) error {
 		}
 
 		if hasAccess {
-			board, err := bh.BoardRepo.FindByID(c.Request().Context(), boardID)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get board")
-
-			}
-
 			return c.JSON(http.StatusOK, board)
 		} else {
 
