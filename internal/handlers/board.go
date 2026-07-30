@@ -116,6 +116,11 @@ func (bh *BoardHandler) GetByID(c *echo.Context) error {
 				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get board")
 
 			}
+			board.AuthorUsername, err = bh.UserRepo.GetUsernameByID(c.Request().Context(), board.AuthorID)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, "couldnt get username for board")
+
+			}
 			return c.JSON(http.StatusOK, board)
 
 		}
