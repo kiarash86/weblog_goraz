@@ -139,6 +139,14 @@ function boardAuthorLabel(board) {
   return authorLabel(board.author_id);
 }
 
+// Single-letter avatar used on feed cards. Falls back to "?" when we have
+// neither a username nor (for someone else's board) any way to resolve one.
+function boardAuthorInitial(board) {
+  const uname = board.author_username
+    || (state.user && state.user.id === board.author_id ? state.user.username : null);
+  return uname ? escapeHtml(uname.charAt(0).toUpperCase()) : '?';
+}
+
 // Comments come back with an author_username field from the backend now,
 // so we can show the real handle instead of "User #<id>".
 function commentAuthorLabel(comment) {
@@ -269,10 +277,20 @@ function renderFeed() {
 
   wrap.appendChild(el(`
     <div class="feed-toolbar">
-      <span class="feed-title">The feed</span>
-      <input type="search" class="search-input" id="feed-search" placeholder="Search titles…" value="${escapeHtml(state.search)}">
+      <div class="feed-heading">
+        <span class="feed-eyebrow">Marginalia</span>
+        <h1 class="feed-title">The Feed</h1>
+      </div>
+      <div class="search-wrap">
+        <svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8.5" cy="8.5" r="6"></circle>
+          <line x1="17" y1="17" x2="13.2" y2="13.2"></line>
+        </svg>
+        <input type="search" class="search-input" id="feed-search" placeholder="Search titles…" value="${escapeHtml(state.search)}">
+      </div>
     </div>
   `));
+  wrap.appendChild(el(`<div class="feed-rule"></div>`));
 
   const searchInput = wrap.querySelector('#feed-search');
   let searchDebounce;
@@ -316,15 +334,22 @@ function renderFeed() {
   }
 
   const list = el(`<div class="entry-list"></div>`);
-  state.boards.forEach(b => {
+  state.boards.forEach((b, i) => {
+    const indexLabel = String((state.page - 1) * FEED_PAGE_SIZE + i + 1).padStart(3, '0');
     const card = el(`
       <article class="entry-card transition">
-        <div class="entry-meta-row">
-          <span class="entry-meta"><span class="author">${boardAuthorLabel(b)}</span></span>
-          ${stampMarkup(b.is_private)}
+        <div class="entry-index">${indexLabel}</div>
+        <div class="entry-content">
+          <div class="entry-meta-row">
+            <span class="entry-meta">
+              <span class="author-avatar">${boardAuthorInitial(b)}</span>
+              <span class="author">${boardAuthorLabel(b)}</span>
+            </span>
+            ${stampMarkup(b.is_private)}
+          </div>
+          <h3>${escapeHtml(b.title)}</h3>
+          <p class="entry-excerpt">${escapeHtml((b.content || '').slice(0, 160))}${(b.content || '').length > 160 ? '…' : ''}</p>
         </div>
-        <h3>${escapeHtml(b.title)}</h3>
-        <p class="entry-excerpt">${escapeHtml((b.content || '').slice(0, 160))}${(b.content || '').length > 160 ? '…' : ''}</p>
       </article>
     `);
     card.onclick = () => navigate({ name: 'detail', id: b.id });
