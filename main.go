@@ -47,7 +47,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTKey)
 	boardHandler := handlers.NewBoardHandler(boardRepo, boardShareRepo)
 	boardShareHandler := handlers.NewBoardShareHandler(boardRepo, boardShareRepo, userRepo)
-	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo)
+	commentHandler := handlers.NewCommentHandler(boardRepo, boardShareRepo, commentRepo , userRepo)
 
 	e := echo.New()
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
