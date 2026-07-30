@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"weblog/internal/models"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -14,16 +15,16 @@ func NewBoardRepository(pp *pgxpool.Pool) *BoardRepository {
 	return &BoardRepository{db: pp}
 }
 
-func (ur *BoardRepository) DeleteByID(ctx context.Context, id int  , authorID int) error {
+func (ur *BoardRepository) DeleteByID(ctx context.Context, id int, authorID int) error {
 	query := `DELETE FROM boards WHERE id = $1 AND author_id = $2`
-	_, err := ur.db.Exec(ctx, query, id , authorID)
+	_, err := ur.db.Exec(ctx, query, id, authorID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ur *BoardRepository) Add(ctx context.Context, AuthorID int , title string , content string  , isPrivate bool , imgPath string) (*models.Board, error) {
+func (ur *BoardRepository) Add(ctx context.Context, AuthorID int, title string, content string, isPrivate bool, imgPath string) (*models.Board, error) {
 	query :=
 		`
 		INSERT INTO boards (author_id, title , content , is_private , img_path)
@@ -32,8 +33,8 @@ func (ur *BoardRepository) Add(ctx context.Context, AuthorID int , title string 
 		`
 
 	var board models.Board
-	err := ur.db.QueryRow(ctx, query,AuthorID , title , content , isPrivate , imgPath).Scan(
-		&board.ID, &board.AuthorID, &board.Title  ,&board.Content  ,&board.ISPrivate  ,&board.ImagePath  ,
+	err := ur.db.QueryRow(ctx, query, AuthorID, title, content, isPrivate, imgPath).Scan(
+		&board.ID, &board.AuthorID, &board.Title, &board.Content, &board.ISPrivate, &board.ImagePath,
 	)
 	if err != nil {
 		return nil, err
@@ -44,9 +45,9 @@ func (ur *BoardRepository) Add(ctx context.Context, AuthorID int , title string 
 func (ur *BoardRepository) FindByID(ctx context.Context, id int) (*models.Board, error) {
 	query := `SELECT id, author_id, title , content , is_private , img_path FROM boards WHERE id = $1`
 
-var board models.Board
-	err := ur.db.QueryRow(ctx, query,id ).Scan(
-		&board.ID, &board.AuthorID, &board.Title  ,&board.Content  ,&board.ISPrivate  ,&board.ImagePath  ,
+	var board models.Board
+	err := ur.db.QueryRow(ctx, query, id).Scan(
+		&board.ID, &board.AuthorID, &board.Title, &board.Content, &board.ISPrivate, &board.ImagePath,
 	)
 	if err != nil {
 		return nil, err
@@ -54,46 +55,51 @@ var board models.Board
 	return &board, nil
 }
 
-
-func (ur * BoardRepository) IsOwner(ctx context.Context  , boardID int, userID int  ) (bool , error){
+func (ur *BoardRepository) IsOwner(ctx context.Context, boardID int, userID int) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM boards WHERE id = $1 AND author_id = $2)`
 	var isOwner bool
-	err := ur.db.QueryRow(ctx , query , boardID , userID).Scan(&isOwner)
+	err := ur.db.QueryRow(ctx, query, boardID, userID).Scan(&isOwner)
 
 	if err != nil {
-		return false , err
+		return false, err
 	}
-	return  isOwner , nil
+	return isOwner, nil
 }
 
+func (ur *BoardRepository) ListFeed(ctx context.Context, userID int, page int, search string) (boards []*models.Board, err error) {
+	limit := 10
+	offset := (page - 1) * limit
 
-func (ur *BoardRepository) ListFeed(ctx context.Context, userID int) (boards []*models.Board,err error) {
-	query := `SELECT id , author_id, title , content , is_private , img_path FROM boards WHERE is_private = false
-   OR author_id = $1
-   OR id IN (SELECT board_id FROM board_shares WHERE user_id = $1)`
-   rows , err := ur.db.Query(ctx, query,userID )
-   
-if err != nil {
-	return nil, err
-}
-defer rows.Close()
+	query := `
+	SELECT id, author_id, title, content, is_private, img_path
+	FROM boards
+	WHERE (is_private = false
+	   OR author_id = $1
+	   OR id IN (SELECT board_id FROM board_shares WHERE user_id = $1))
+	  AND title ILIKE $2
+	ORDER BY id DESC
+	LIMIT $3 OFFSET $4
+`
+	rows, err := ur.db.Query(ctx, query, userID, search, limit, offset)
 
-	for rows.Next(){
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
 		var board models.Board
-		err= rows.Scan(&board.ID, &board.AuthorID, &board.Title  ,&board.Content  ,&board.ISPrivate  ,&board.ImagePath   ,)
+		err = rows.Scan(&board.ID, &board.AuthorID, &board.Title, &board.Content, &board.ISPrivate, &board.ImagePath)
 		if err != nil {
 			return nil, err
 		}
-		boards= append(boards, &board)
-
+		boards = append(boards, &board)
 
 	}
 	err = rows.Err()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return
 }
-
-
