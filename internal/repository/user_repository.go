@@ -55,6 +55,19 @@ func (ur *UserRepository) FindByID(ctx context.Context, id int) (*models.User, e
 	return &user, nil
 }
 
+func (ur *UserRepository) GetUsernameByID(ctx context.Context, id int) (string, error) {
+	query := `SELECT username FROM users WHERE id = $1`
+
+	var username string
+	err := ur.db.QueryRow(ctx, query, id).Scan(
+		&username,
+	)
+	if err != nil {
+		return "", err
+	}
+	return username, nil
+}
+
 func (ur *UserRepository) FindByUserName(ctx context.Context, username string) (*models.User, error) {
 	query := `SELECT id, username, password FROM users WHERE username = $1`
 
