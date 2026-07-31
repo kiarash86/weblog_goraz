@@ -366,6 +366,9 @@ main {
 .entry-list {
   display: flex;
   flex-direction: column;
+  margin-top: -20px; /* restores the tighter visual gap the old
+    first-child padding hack gave us, but on the list itself —
+    so it no longer shrinks whichever card happens to be first */
 }
 
 .entry-card {
@@ -380,7 +383,6 @@ main {
   overflow: hidden; /* belt-and-suspenders: nothing inside can ever push
     the card wider or taller than the fixed title/excerpt slots below */
 }
-.entry-card:first-child { padding-top: 6px; }
 .entry-card:last-child { border-bottom: none; }
 
 .entry-card:hover {
