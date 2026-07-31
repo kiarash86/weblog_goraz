@@ -9,6 +9,15 @@
 const API_BASE = (window.MARGINALIA_CONFIG && window.MARGINALIA_CONFIG.API_BASE) || '';
 const STORAGE_KEY = 'marginalia_auth';
 
+// img_path from the API is a relative path (e.g. "/uploads/xxx.jpg") served
+// by the Go backend itself, not by whatever origin the frontend is running
+// on. Resolve it against API_BASE so the <img> actually points at the file.
+function resolveImageUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path; // already absolute
+  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 function loadStoredAuth() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -449,7 +458,7 @@ async function renderDetail(id) {
         ${stampMarkup(b.is_private)}
       </div>
       <span class="entry-meta">${boardAuthorLabel(b)}</span>
-      ${b.img_path ? `<img class="entry-image" src="${escapeHtml(b.img_path)}" alt="">` : ''}
+      ${b.img_path ? `<img class="entry-image" src="${escapeHtml(resolveImageUrl(b.img_path))}" alt="" onerror="this.style.display='none'">` : ''}
       <p class="entry-body">${escapeHtml(b.content)}</p>
       <div class="entry-actions">
         ${isOwner ? `<button class="btn btn-brass" id="btn-share">Share</button>` : ''}

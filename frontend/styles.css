@@ -439,9 +439,14 @@ main {
   font-family: var(--font-display);
   font-size: 22px;
   line-height: 1.25;
+  height: 2.5em; /* reserves exactly 2 lines, short or long titles alike */
   margin: 0 0 8px;
   color: var(--paper);
   transition: color 0.18s ease;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .entry-card:hover h3 { color: var(--brass); }
 
@@ -449,6 +454,7 @@ main {
   color: var(--paper-dim);
   font-size: 14px;
   line-height: 1.55;
+  height: 3.1em; /* reserves exactly 2 lines, short or long excerpts alike */
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
