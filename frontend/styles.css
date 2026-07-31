@@ -373,10 +373,12 @@ main {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 18px;
+  height: 190px; /* fixed card size — content is clipped, never resizes the card */
   padding: 26px 16px 26px 0;
   border-bottom: 1px solid var(--ink-line);
   border-left: 2px solid var(--ink-line);
   cursor: pointer;
+  overflow: hidden;
 }
 .entry-card:first-child { padding-top: 6px; }
 .entry-card:last-child { border-bottom: none; }
