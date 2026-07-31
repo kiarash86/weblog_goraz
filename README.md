@@ -2,7 +2,8 @@
 
 A shared weblog built with **Go**, **Echo**, and **PostgreSQL**, with a vanilla JS frontend. Users can post public or private entries, share private entries with specific people, and leave comments ("notes in the margin").
 
-**Live app:** https://webloggoraz-production.up.railway.app (API) — frontend deployed on Netlify
+**Live app:** https://webloggoraz-production.up.railway.app (API)
+**actual site** https://goraz-web.netlify.app (deployed on Netlify)
 **Repo:** https://github.com/kiarash86/weblog_goraz
 
 ---
