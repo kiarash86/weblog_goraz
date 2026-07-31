@@ -373,7 +373,12 @@ main {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 18px;
-  height: 190px; /* fixed card size — content is clipped, never resizes the card */
+  height: 190px;
+  min-height: 190px;
+  max-height: 190px;
+  flex: 0 0 190px; /* flex-grow:0, flex-shrink:0 — the card is a fixed
+    size, full stop. It cannot be squeezed smaller by its flex parent
+    (.entry-list) and it cannot be stretched larger by its content. */
   padding: 26px 16px 26px 0;
   border-bottom: 1px solid var(--ink-line);
   border-left: 2px solid var(--ink-line);
