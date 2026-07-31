@@ -12,9 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// ai code
-// later i will check to see what this is doing
-//go:embed *.sql
 var migrationFiles embed.FS
 
 func Run(pool *pgxpool.Pool) error {
